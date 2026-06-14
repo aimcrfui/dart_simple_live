@@ -1,47 +1,68 @@
-name: build-macos
+name: Build macOS
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-macos:
-    runs-on: macos-13
-    permissions:
-      contents: write
+    # Apple Silicon runner。Intel Mac 可改为 macos-15-intel
+    runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Flutter action
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.38.x"
           cache: true
 
-      - name: Enable Flutter Desktop
+      - name: Enable macOS desktop
         run: flutter config --enable-macos-desktop
 
-      - name: Restore packages
+      - name: Install dependencies
+        working-directory: simple_live_app
+        run: flutter pub get
+
+      - name: Build macOS release
+        working-directory: simple_live_app
+        run: flutter build macos --release
+
+      - name: Show application architectures
+        working-directory: simple_live_app
         run: |
-          cd simple_live_app
-          flutter pub get
+          lipo -archs \
+            "build/macos/Build/Products/Release/Simple Live.app/Contents/MacOS/Simple Live"
 
-      - name: Install appdmg
-        run: npm install -g appdmg
-
-      - name: Install flutter_distributor
-        run: dart pub global activate flutter_distributor
-
-      - name: Build MacOS
+      - name: Package ZIP and DMG
+        working-directory: simple_live_app
         run: |
-          cd simple_live_app
-          flutter_distributor package --platform macos --targets dmg,zip --skip-clean
+          APP="build/macos/Build/Products/Release/Simple Live.app"
 
-      - name: Upload MacOS to Artifacts
+          mkdir -p build/package
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$APP" \
+            "build/package/Simple-Live-macOS.zip"
+
+          mkdir -p build/dmg
+          ditto "$APP" "build/dmg/Simple Live.app"
+          ln -s /Applications build/dmg/Applications
+
+          hdiutil create \
+            -volname "Simple Live" \
+            -srcfolder build/dmg \
+            -ov \
+            -format UDZO \
+            "build/package/Simple-Live-macOS.dmg"
+
+      - name: Upload macOS packages
         uses: actions/upload-artifact@v4
         with:
-          name: mac
-          path: |
-            simple_live_app/build/dist/*/*.dmg
-            simple_live_app/build/dist/*/*.zip
-          retention-days: 7
+          name: Simple-Live-macOS
+          path: simple_live_app/build/package/*
+          if-no-files-found: error
+          compression-level: 0
