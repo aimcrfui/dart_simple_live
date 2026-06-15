@@ -8,8 +8,8 @@ permissions:
 
 jobs:
   build-macos:
-    # Apple Silicon runner。Intel Mac 可改为 macos-15-intel
-    runs-on: macos-15
+    # Apple Silicon runner。Intel Mac 可改为 macos-26-intel
+    runs-on: macos-26
 
     steps:
       - name: Checkout
